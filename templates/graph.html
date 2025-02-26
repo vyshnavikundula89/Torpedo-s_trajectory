@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSV Graph</title>
+    {{ cdn_js | safe }}
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>CSV Column Graph</h1>
+        <p><i>Hover over points to see values, zoom in and out, pan the graph, and click on the legend to hide/show lines.</i></p>
+        {{ script | safe }}
+        {{ div | safe }}
+    </div>
+</body>
+</html>
