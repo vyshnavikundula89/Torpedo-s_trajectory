@@ -14,26 +14,23 @@ app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
-def get_column_counts(files_data):
-    """Returns a set of column counts from all uploaded CSV files"""
-    column_counts = set()
-    for file_info in files_data:
-        filepath = file_info["path"]
-        if os.path.exists(filepath):
-            try:
-                df = pd.read_csv(filepath)
-                if not df.empty:
-                    column_counts.add(len(df.columns))
-            except Exception as e:
-                print(f"Error reading {filepath}: {e}")
-    return column_counts
+def get_column_count(files_data):
+    """Returns the number of columns from the first uploaded CSV (if available)"""
+    if files_data:
+        filepath = files_data[0]["path"]
+        try:
+            df = pd.read_csv(filepath)
+            return len(df.columns)
+        except Exception as e:
+            print(f"Error reading {filepath}: {e}")
+    return None
 
 @app.route("/", methods=["GET", "POST"])
 def index():
     if "files_data" not in session:
         session["files_data"] = []
 
-    global_column = 1  
+    selected_column_index = session.get("selected_column_index", None)
 
     if request.method == "POST":
         if "files[]" in request.files:
@@ -48,6 +45,7 @@ def index():
 
         if "clear_all" in request.form:
             session["files_data"] = []
+            session["selected_column_index"] = None
             session.modified = True
             return redirect(url_for("index"))
 
@@ -57,43 +55,54 @@ def index():
             session.modified = True
             return redirect(url_for("index"))
 
-        if "update_all_columns" in request.form:
+        if "select_column" in request.form:
             try:
-                global_column = int(request.form["column"]) - 1  
+                selected_column_index = int(request.form["column_index"])
+                column_count = get_column_count(session["files_data"])
+
+                if column_count is not None and 0 <= selected_column_index < column_count:
+                    session["selected_column_index"] = selected_column_index
+                else:
+                    session["selected_column_index"] = None
             except ValueError:
-                global_column = 0  
+                session["selected_column_index"] = None
 
-    column_counts = get_column_counts(session["files_data"])
-    same_columns = len(column_counts) == 1  
+            session.modified = True
 
-    return render_template("index.html", files_data=session["files_data"], same_columns=same_columns, global_column=global_column)
+    column_count = get_column_count(session["files_data"])
+    same_columns = column_count is not None
+    column_range = f"0 to {column_count - 1}" if same_columns else None
+
+    return render_template("index.html", files_data=session["files_data"], same_columns=same_columns, column_range=column_range, selected_column_index=selected_column_index)
 
 @app.route("/graph")
 def graph():
     if "files_data" not in session or not session["files_data"]:
         return "<h2>No data available to plot. Please upload a CSV file first.</h2>"
 
-    column_counts = get_column_counts(session["files_data"])
-    
-    if len(column_counts) != 1:
+    column_count = get_column_count(session["files_data"])
+    if column_count is None:
         return "<h2>Uploaded files have different numbers of columns. Please upload files with the same structure.</h2>"
 
-    dfs = []
-    global_column = 1  
+    selected_column_index = session.get("selected_column_index", None)
+    if selected_column_index is None:
+        return "<h2>No column index selected. Please enter a valid column index before plotting.</h2>"
 
+    dfs = []
     for file_info in session["files_data"]:
         filepath = file_info["path"]
         try:
             df = pd.read_csv(filepath)
-            if not df.empty and global_column < len(df.columns):
-                column_data = df.iloc[:, global_column]
+            if not df.empty and 0 <= selected_column_index < len(df.columns):
+                column_name = df.columns[selected_column_index]
+                column_data = df[column_name]
                 if column_data.dtype in ["float64", "int64"]:
                     dfs.append((file_info["name"], column_data))
         except Exception as e:
             print(f"Error processing {filepath}: {e}")
 
     if not dfs:
-        return "<h2>No numeric data found in uploaded files.</h2>"
+        return "<h2>No numeric data found in the selected column.</h2>"
 
     p = figure(title="CSV Column Comparison", x_axis_label="Index", y_axis_label="Values", width=1000, height=600)
 
