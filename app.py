@@ -14,19 +14,19 @@ app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
-def get_max_columns(files_data):
-    """Returns the maximum column count among all uploaded CSV files"""
-    max_cols = 1  
+def get_column_counts(files_data):
+    """Returns a set of column counts from all uploaded CSV files"""
+    column_counts = set()
     for file_info in files_data:
         filepath = file_info["path"]
         if os.path.exists(filepath):
             try:
                 df = pd.read_csv(filepath)
                 if not df.empty:
-                    max_cols = max(max_cols, len(df.columns))
+                    column_counts.add(len(df.columns))
             except Exception as e:
                 print(f"Error reading {filepath}: {e}")
-    return max_cols
+    return column_counts
 
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -34,7 +34,6 @@ def index():
         session["files_data"] = []
 
     global_column = 1  
-    max_columns = get_max_columns(session["files_data"])  
 
     if request.method == "POST":
         if "files[]" in request.files:
@@ -54,9 +53,7 @@ def index():
 
         if "remove_file" in request.form:
             filename = request.form["remove_file"]
-            session["files_data"] = [
-                file for file in session["files_data"] if file["name"] != filename
-            ]
+            session["files_data"] = [file for file in session["files_data"] if file["name"] != filename]
             session.modified = True
             return redirect(url_for("index"))
 
@@ -66,15 +63,20 @@ def index():
             except ValueError:
                 global_column = 0  
 
-    max_columns = max(1, get_max_columns(session["files_data"]))  
-    global_column = min(global_column, max_columns - 1)  
+    column_counts = get_column_counts(session["files_data"])
+    same_columns = len(column_counts) == 1  
 
-    return render_template("index.html", files_data=session["files_data"], max_columns=max_columns, global_column=global_column)
+    return render_template("index.html", files_data=session["files_data"], same_columns=same_columns, global_column=global_column)
 
 @app.route("/graph")
 def graph():
     if "files_data" not in session or not session["files_data"]:
         return "<h2>No data available to plot. Please upload a CSV file first.</h2>"
+
+    column_counts = get_column_counts(session["files_data"])
+    
+    if len(column_counts) != 1:
+        return "<h2>Uploaded files have different numbers of columns. Please upload files with the same structure.</h2>"
 
     dfs = []
     global_column = 1  

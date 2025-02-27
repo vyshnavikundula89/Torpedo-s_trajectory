@@ -12,7 +12,6 @@
 
         <div class="upload-section">
             <form action="/" method="POST" enctype="multipart/form-data" class="upload-form">
-                <label for="file-input" class="file-label">Choose CSV Files</label>
                 <input id="file-input" type="file" name="files[]" multiple accept=".csv">
                 <button type="submit" class="btn-primary">Upload</button>
                 <span class="file-selected">No file selected</span>
@@ -23,14 +22,15 @@
             <div class="files-section">
                 <h2>Uploaded Files</h2>
                 <button onclick="clearAllFiles()" class="btn-clear-all">Clear All Files</button>
-                
-                <form method="POST" class="column-select-form">
-                    <label>Select Column (1 - {{ max_columns }}):</label>
-                    <input type="number" name="column" min="1" max="{{ max_columns }}" value="{{ global_column + 1 }}" class="column-input" required>
-                    <input type="hidden" name="update_all_columns" value="true">
-                    <button type="submit" class="btn-primary">Update Plot</button>
-                </form>
-                
+
+                {% if not same_columns %}
+                    <p class="error-message">Error: Uploaded files have different numbers of columns. Please upload files with the same structure.</p>
+                {% else %}
+                    <a href="{{ url_for('graph') }}" target="_blank">
+                        <button class="btn-primary">Display Graph</button>
+                    </a>
+                {% endif %}
+
                 <ul class="files-list">
                     {% for file in files_data %}
                         <li class="file-item">
@@ -42,10 +42,6 @@
                         </li>
                     {% endfor %}
                 </ul>
-
-                <a href="{{ url_for('graph') }}" target="_blank">
-                    <button class="btn-primary">Display Graph</button>
-                </a>
             </div>
         {% endif %}
     </div>
