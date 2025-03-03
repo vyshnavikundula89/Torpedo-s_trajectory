@@ -1,10 +1,10 @@
 from flask import Flask, render_template, request, session, redirect, url_for
 import os
 import pandas as pd
-from bokeh.plotting import figure, show
-from bokeh.models import ColumnDataSource, HoverTool
+from bokeh.plotting import figure
+from bokeh.models import ColumnDataSource, HoverTool, PanTool, WheelZoomTool, ResetTool
 from bokeh.embed import components
-from bokeh.palettes import Category10
+from bokeh.palettes import Category10, viridis
 from bokeh.resources import CDN
 
 app = Flask(__name__)
@@ -60,7 +60,6 @@ def index():
             try:
                 selected_column_index = int(request.form["column_index"])
                 column_count = get_column_count(session["files_data"])
-
                 if column_count is not None and 0 <= selected_column_index < column_count:
                     session["selected_column_index"] = selected_column_index
                 else:
@@ -105,17 +104,18 @@ def graph():
     if not dfs:
         return "<h2>No numeric data found in the selected column.</h2>"
 
-    p = figure(title="CSV Column Comparison", x_axis_label="Index", y_axis_label="Values", width=1000, height=600)
-    colors = Category10[len(dfs)]
+    p = figure(title="CSV Column Comparison", x_axis_label="Index", y_axis_label="Values", width=1000, height=600, tools="pan,wheel_zoom,box_zoom,reset")
+    num_dfs = len(dfs)
+    colors = Category10[10] if num_dfs <= 10 else viridis(num_dfs)
 
     for (name, column_data), color in zip(dfs, colors):
         source = ColumnDataSource(data={"x": list(range(len(column_data))), "y": column_data.tolist()})
         p.line("x", "y", source=source, legend_label=name, line_width=2, color=color)
         p.circle("x", "y", source=source, size=6, color=color, legend_label=name)
 
-
-    hover = HoverTool(tooltips=[("Y-Value", "@y")], mode="mouse")
-    p.add_tools(hover)
+    hover = HoverTool(tooltips=[("Index", "@x"), ("Value", "@y")], mode="mouse")
+    p.add_tools(hover, PanTool(), WheelZoomTool(), ResetTool())
+    p.legend.click_policy = "hide"
 
     script, div = components(p)
     return render_template("graph.html", script=script, div=div, cdn_js=CDN.render())
