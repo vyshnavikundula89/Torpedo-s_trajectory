@@ -4,6 +4,7 @@ import pandas as pd
 from bokeh.plotting import figure
 from bokeh.embed import components
 from bokeh.models import ColumnDataSource
+from bokeh.palettes import Category10
 from bokeh.resources import CDN
 
 app = Flask(__name__)
@@ -105,11 +106,13 @@ def graph():
         return "<h2>No numeric data found in the selected column.</h2>"
 
     p = figure(title="CSV Column Comparison", x_axis_label="Index", y_axis_label="Values", width=1000, height=600)
+    colors = Category10[len(dfs)]
 
-    for name, column_data in dfs:
+    for (name, column_data), color in zip(dfs, colors):
         source = ColumnDataSource(data={"x": list(range(len(column_data))), "y": column_data.tolist()})
-        p.line("x", "y", source=source, legend_label=name, line_width=2)
-        p.circle("x", "y", source=source, size=6, color="red", legend_label=name)
+        p.line("x", "y", source=source, legend_label=name, line_width=2, color=color)
+        p.circle("x", "y", source=source, size=6, color=color, legend_label=name)
+    
 
     script, div = components(p)
     return render_template("graph.html", script=script, div=div, cdn_js=CDN.render())
