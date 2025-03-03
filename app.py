@@ -1,9 +1,9 @@
 from flask import Flask, render_template, request, session, redirect, url_for
 import os
 import pandas as pd
-from bokeh.plotting import figure
+from bokeh.plotting import figure, show
+from bokeh.models import ColumnDataSource, HoverTool
 from bokeh.embed import components
-from bokeh.models import ColumnDataSource
 from bokeh.palettes import Category10
 from bokeh.resources import CDN
 
@@ -112,7 +112,10 @@ def graph():
         source = ColumnDataSource(data={"x": list(range(len(column_data))), "y": column_data.tolist()})
         p.line("x", "y", source=source, legend_label=name, line_width=2, color=color)
         p.circle("x", "y", source=source, size=6, color=color, legend_label=name)
-    
+
+
+    hover = HoverTool(tooltips=[("Y-Value", "@y")], mode="mouse")
+    p.add_tools(hover)
 
     script, div = components(p)
     return render_template("graph.html", script=script, div=div, cdn_js=CDN.render())
