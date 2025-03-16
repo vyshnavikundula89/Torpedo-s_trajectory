@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, session, redirect, url_for
 import os
+import re
 import pandas as pd
 from bokeh.plotting import figure
 from bokeh.models import ColumnDataSource, HoverTool, PanTool, WheelZoomTool, ResetTool
@@ -15,8 +16,41 @@ app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
+# Function to convert hex to decimal
+def hex_to_decimal(hex_str):
+    is_negative = False
+    if hex_str.startswith('-'):
+        is_negative = True
+        hex_str = hex_str[1:]  
+    
+    if '.' in hex_str:
+        integer_part, fractional_part = hex_str.split('.')
+    else:
+        integer_part, fractional_part = hex_str, ''
+    
+    decimal_int = int(integer_part, 16) if integer_part else 0
+    decimal_fraction = sum(int(digit, 16) / (16 ** (i + 1)) for i, digit in enumerate(fractional_part))
+    decimal_value = decimal_int + decimal_fraction
+    return -decimal_value if is_negative else decimal_value
+
+# Function to process HEX file and convert to CSV
+def process_hex_file(file_path):
+    csv_filename = os.path.splitext(os.path.basename(file_path))[0] + ".csv"
+    output_file_path = os.path.join(app.config["UPLOAD_FOLDER"], csv_filename)
+
+    data = []
+    with open(file_path, 'r') as hex_file:
+        for line in hex_file:
+            hex_values = re.findall(r'[0-9A-Fa-f.-]+', line.strip())
+            decimal_values = [hex_to_decimal(hv) for hv in hex_values]
+            data.append(decimal_values)
+
+    df = pd.DataFrame(data)
+    df.to_csv(output_file_path, index=False, header=False)
+    return output_file_path
+
 def get_column_count(files_data):
-    """Returns the number of columns from the first uploaded CSV (if available)"""
+    """Returns the number of columns from the first uploaded CSV"""
     if files_data:
         filepath = files_data[0]["path"]
         try:
@@ -37,10 +71,15 @@ def index():
         if "files[]" in request.files:
             files = request.files.getlist("files[]")
             for file in files:
-                if file and file.filename.endswith(".csv"):
+                if file and file.filename:
+                    file_ext = os.path.splitext(file.filename)[1].lower()
                     filepath = os.path.join(app.config["UPLOAD_FOLDER"], file.filename)
                     file.save(filepath)
-                    session["files_data"].append({"name": file.filename, "path": filepath})
+
+                    if file_ext == ".hex":
+                        filepath = process_hex_file(filepath)
+
+                    session["files_data"].append({"name": os.path.basename(filepath), "path": filepath})
             session.modified = True
             return redirect(url_for("index"))
 
@@ -53,6 +92,11 @@ def index():
         if "remove_file" in request.form:
             filename = request.form["remove_file"]
             session["files_data"] = [file for file in session["files_data"] if file["name"] != filename]
+
+            file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+            if os.path.exists(file_path):
+                os.remove(file_path)
+
             session.modified = True
             return redirect(url_for("index"))
 

@@ -8,11 +8,11 @@
 </head>
 <body>
     <div class="container">
-        <h1>CSV File Comparison Tool</h1>
+        <h1>CSV & HEX File Comparison Tool</h1>
 
         <div class="upload-section">
             <form action="/" method="POST" enctype="multipart/form-data" class="upload-form">
-                <input id="file-input" type="file" name="files[]" multiple accept=".csv" style="border: 2px solid #0056b3; padding: 10px; background: linear-gradient(135deg, #007BFF, #00A3FF); color: white; border-radius: 5px;">
+                <input id="file-input" type="file" name="files[]" multiple accept=".csv, .hex">
                 <button type="submit" class="btn-primary">Upload</button>
                 <span class="file-selected">No file selected</span>
             </form>
