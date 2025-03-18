@@ -21,13 +21,13 @@ def hex_to_decimal(hex_str):
     is_negative = False
     if hex_str.startswith('-'):
         is_negative = True
-        hex_str = hex_str[1:]  
-    
+        hex_str = hex_str[1:]
+
     if '.' in hex_str:
         integer_part, fractional_part = hex_str.split('.')
     else:
         integer_part, fractional_part = hex_str, ''
-    
+
     decimal_int = int(integer_part, 16) if integer_part else 0
     decimal_fraction = sum(int(digit, 16) / (16 ** (i + 1)) for i, digit in enumerate(fractional_part))
     decimal_value = decimal_int + decimal_fraction
@@ -125,39 +125,48 @@ def graph():
         return "<h2>No data available to plot. Please upload a CSV file first.</h2>"
 
     column_count = get_column_count(session["files_data"])
-    if column_count is None:
-        return "<h2>Uploaded files have different numbers of columns. Please upload files with the same structure.</h2>"
+    if column_count is None or column_count < 2:
+        return "<h2>Uploaded files must have at least two columns (time + data).</h2>"
 
     selected_column_index = session.get("selected_column_index", None)
-    if selected_column_index is None:
-        return "<h2>No column index selected. Please enter a valid column index before plotting.</h2>"
+    if selected_column_index is None or selected_column_index == 0:
+        return "<h2>Please select a valid column index (excluding 0th column).</h2>"
 
     dfs = []
     for file_info in session["files_data"]:
         filepath = file_info["path"]
         try:
             df = pd.read_csv(filepath)
-            if not df.empty and 0 <= selected_column_index < len(df.columns):
-                column_name = df.columns[selected_column_index]
-                column_data = df[column_name]
-                if column_data.dtype in ["float64", "int64"]:
-                    dfs.append((file_info["name"], column_data))
+
+            if df.shape[1] <= selected_column_index:
+                continue
+
+            df.rename(columns={df.columns[0]: "time"}, inplace=True)
+
+            df = df[(df >= 0).all(axis=1)]
+
+            dfs.append((file_info["name"], df))
         except Exception as e:
             print(f"Error processing {filepath}: {e}")
 
     if not dfs:
-        return "<h2>No numeric data found in the selected column.</h2>"
+        return "<h2>No valid data found after filtering.</h2>"
 
-    p = figure(title="CSV Column Comparison", x_axis_label="Index", y_axis_label="Values", width=1000, height=600, tools="pan,wheel_zoom,box_zoom,reset")
+    min_time = min(df["time"].min() for _, df in dfs)
+    for _, df in dfs:
+        df["time"] -= min_time  
+
+    p = figure(title="CSV Column Comparison", x_axis_label="Time (normalized)", y_axis_label="Data", width=1000, height=700, tools="pan,wheel_zoom,box_zoom,reset")
+
     num_dfs = len(dfs)
     colors = Category10[10] if num_dfs <= 10 else viridis(num_dfs)
 
-    for (name, column_data), color in zip(dfs, colors):
-        source = ColumnDataSource(data={"x": list(range(len(column_data))), "y": column_data.tolist()})
+    for (name, df), color in zip(dfs, colors):
+        source = ColumnDataSource(data={"x": df["time"].tolist(), "y": df.iloc[:, selected_column_index].tolist()})
         p.line("x", "y", source=source, legend_label=name, line_width=2, color=color)
         p.circle("x", "y", source=source, size=6, color=color, legend_label=name)
 
-    hover = HoverTool(tooltips=[("Index", "@x"), ("Value", "@y")], mode="mouse")
+    hover = HoverTool(tooltips=[("Time", "@x"), ("Value", "@y")], mode="mouse")
     p.add_tools(hover, PanTool(), WheelZoomTool(), ResetTool())
     p.legend.click_policy = "hide"
 
